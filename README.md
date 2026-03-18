@@ -10,7 +10,7 @@ An interactive analytics tool that forecasts product demand using 5 statistical 
 
 ## Live Demo
 
-[View Dashboard →](https://vanshsingh1203-demand-forecast.streamlit.app)
+[View Dashboard →](https://demand-forecast-9hjy8sujmqrpxzcxnlgacb.streamlit.app/)
 
 ---
 
