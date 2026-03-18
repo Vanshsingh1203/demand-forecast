@@ -8,8 +8,15 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 def load_all_data():
     """Load and merge all CSV files into a single clean dataframe."""
 
-    # Load raw files
-    sales = pd.read_csv(os.path.join(DATA_DIR, "train.csv"), parse_dates=["date"])
+    # Load raw files - prefer parquet (smaller) over csv
+    parquet_path = os.path.join(DATA_DIR, "train.parquet")
+    csv_path = os.path.join(DATA_DIR, "train.csv")
+    if os.path.exists(parquet_path):
+        sales = pd.read_parquet(parquet_path)
+        sales["date"] = pd.to_datetime(sales["date"])
+    else:
+        sales = pd.read_csv(csv_path, parse_dates=["date"])
+
     stores = pd.read_csv(os.path.join(DATA_DIR, "stores.csv"))
     oil = pd.read_csv(os.path.join(DATA_DIR, "oil.csv"), parse_dates=["date"])
     holidays = pd.read_csv(os.path.join(DATA_DIR, "holidays_events.csv"), parse_dates=["date"])
@@ -26,7 +33,6 @@ def load_all_data():
     oil["oil_price"] = oil["oil_price"].ffill().bfill()
 
     # --- Clean holidays ---
-    # Keep only national and regional holidays, remove transferred/bridge
     holidays_clean = holidays[
         (holidays["transferred"] == False) &
         (holidays["type"].isin(["Holiday", "Event"]))
@@ -67,10 +73,7 @@ def load_all_data():
 
 
 def get_aggregated_sales(df, freq="W"):
-    """
-    Aggregate sales by date at a given frequency.
-    freq: 'D' = daily, 'W' = weekly, 'M' = monthly
-    """
+    """Aggregate sales by date at a given frequency."""
     agg = df.groupby(pd.Grouper(key="date", freq=freq)).agg(
         total_sales=("sales", "sum"),
         avg_sales=("sales", "mean"),
@@ -103,12 +106,7 @@ def get_store_sales(df, store_nbr, freq="D"):
 
 
 def get_abc_classification(df):
-    """
-    ABC Analysis: Classify product families by revenue contribution.
-    A = top 80% of revenue (vital few)
-    B = next 15% of revenue
-    C = bottom 5% of revenue
-    """
+    """ABC Analysis: Classify product families by revenue contribution."""
     family_revenue = df.groupby("family")["sales"].sum().sort_values(ascending=False).reset_index()
     family_revenue.columns = ["family", "total_sales"]
     family_revenue["cumulative_sales"] = family_revenue["total_sales"].cumsum()
@@ -124,7 +122,6 @@ def get_abc_classification(df):
 
 
 if __name__ == "__main__":
-    # Quick test
     df = load_all_data()
     print("\nColumns:", list(df.columns))
     print("\nSample:")
