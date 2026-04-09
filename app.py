@@ -109,10 +109,12 @@ def main():
         st.subheader("Year-over-Year Sales Comparison")
         yoy_df = df.groupby(["year", "month"])["sales"].sum().reset_index()
         yoy_df["month_label"] = pd.to_datetime(yoy_df["month"], format="%m").dt.strftime("%b")
+        yoy_df["year"] = yoy_df["year"].astype(str)
+        month_order = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         fig = px.line(yoy_df, x="month_label", y="sales", color="year",
-                      labels={"sales": "Total Sales", "month_label": "Month", "year": "Year"},
-                      color_discrete_sequence=px.colors.sequential.Blues[2:])
-        fig.update_layout(height=350, margin=dict(t=10), legend=dict(orientation="h", y=1.1))
+                      category_orders={"month_label": month_order},
+                      labels={"sales": "Total Sales", "month_label": "Month", "year": "Year"})
+        fig.update_layout(height=350, margin=dict(t=10), legend=dict(orientation="h", y=1.1, title="Year"))
         st.plotly_chart(fig, use_container_width=True)
 
     # ═══════════════════════════════════════════
@@ -256,7 +258,7 @@ def main():
                 name="Forecast", line=dict(color="#6366f1", width=2.5, dash="dash"),
                 fill="tozeroy", fillcolor="rgba(99,102,241,0.08)",
             ))
-            fig2.add_vline(x=str(fam_data["date"].iloc[-1]), line_dash="dot",
+            fig2.add_vline(x=fam_data["date"].iloc[-1].isoformat(), line_dash="dot",
                            line_color="#e11d48", annotation_text="Forecast start")
             fig2.update_layout(height=420, margin=dict(t=10),
                                legend=dict(orientation="h", y=1.05))
