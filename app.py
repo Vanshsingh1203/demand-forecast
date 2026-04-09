@@ -69,7 +69,7 @@ def main():
 
         with c1:
             st.subheader("Monthly Sales Trend")
-            monthly = get_aggregated_sales(df, "M")
+            monthly = get_aggregated_sales(df, "ME")
             fig = px.line(monthly, x="date", y="total_sales", labels={"total_sales": "Sales", "date": "Date"})
             fig.update_layout(height=350, margin=dict(t=10, b=10))
             st.plotly_chart(fig, use_container_width=True)
@@ -92,7 +92,7 @@ def main():
 
         with c4:
             st.subheader("Oil Price vs Sales (Monthly)")
-            monthly = get_aggregated_sales(df, "M")
+            monthly = get_aggregated_sales(df, "ME")
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             fig.add_trace(go.Scatter(x=monthly["date"], y=monthly["total_sales"], name="Sales", line=dict(color="#6366f1")), secondary_y=False)
             fig.add_trace(go.Scatter(x=monthly["date"], y=monthly["avg_oil_price"], name="Oil Price", line=dict(color="#f59e0b", dash="dash")), secondary_y=True)
@@ -109,7 +109,7 @@ def main():
 
         sel_family = st.selectbox("Select Product Family", families)
         freq = st.radio("Aggregation", ["Daily", "Weekly", "Monthly"], horizontal=True)
-        freq_map = {"Daily": "D", "Weekly": "W", "Monthly": "M"}
+        freq_map = {"Daily": "D", "Weekly": "W", "Monthly": "ME"}
 
         fam_data = get_family_sales(df, sel_family, freq_map[freq])
 
@@ -160,7 +160,7 @@ def main():
 
         sel_family = st.selectbox("Select Product Family", families)
         freq = st.radio("Forecast Frequency", ["Weekly", "Monthly"], horizontal=True)
-        freq_map = {"Weekly": "W", "Monthly": "M"}
+        freq_map = {"Weekly": "W", "Monthly": "ME"}
 
         fam_data = get_family_sales(df, sel_family, freq_map[freq])
 
