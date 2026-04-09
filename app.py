@@ -143,8 +143,12 @@ def main():
         st.subheader("Promotion Impact")
         promo = fam_daily.groupby("onpromotion")["sales"].mean()
         if len(promo) >= 2:
-            promo_lift = ((promo.get(1, 0) - promo.get(0, 0)) / promo.get(0, 1)) * 100
-            st.metric("Promo Sales Lift", f"{promo_lift:.1f}%", delta=f"{'↑' if promo_lift > 0 else '↓'}")
+            base = promo.get(0, 0)
+            if base > 0:
+                promo_lift = ((promo.get(1, 0) - base) / base) * 100
+                st.metric("Promo Sales Lift", f"{promo_lift:.1f}%", delta=f"{'↑' if promo_lift > 0 else '↓'}")
+            else:
+                st.info("Base (no-promo) sales are 0, cannot calculate promo lift.")
         else:
             st.info("Not enough promotion data for this family.")
 
@@ -212,7 +216,7 @@ def main():
         holding_pct = c3.number_input("Holding Cost (%)", value=25, min_value=1, max_value=100) / 100
         lead_time = c4.number_input("Lead Time (days)", value=7, min_value=1)
 
-        service_level = st.slider("Target Service Level", min_value=0.85, max_value=0.99, value=0.95, step=0.01, format="%.0f%%")
+        service_level = st.slider("Target Service Level", min_value=85, max_value=99, value=95, step=1, format="%d%%") / 100
 
         daily_sales = df[df["family"] == sel_family].groupby("date")["sales"].sum()
 

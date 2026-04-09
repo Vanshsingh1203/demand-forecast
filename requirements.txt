@@ -8,6 +8,7 @@ scikit-learn
 streamlit>=1.32.0
 openpyxl
 xgboost
+prophet
 pyarrow
 scipy
 altair>=5,<6
