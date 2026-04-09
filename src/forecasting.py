@@ -164,3 +164,29 @@ def run_all_forecasts(train, test, value_col="sales", date_col="date"):
     print("\n--- Forecast Comparison ---")
     print(results_df[["model", "MAE", "RMSE", "MAPE"]].to_string(index=False))
     return results_df
+
+
+def forecast_future(df, periods, value_col="sales", date_col="date", freq="W"):
+    """
+    Forecast future periods beyond available data using Holt-Winters.
+    Falls back to moving average if Holt-Winters fails.
+    Returns a DataFrame with columns: date, forecast.
+    """
+    vals = df[value_col].values.astype(float)
+    vals = np.maximum(vals, 0)
+
+    seasonal_periods = 52 if freq.startswith("W") else 12
+
+    try:
+        model = ExponentialSmoothing(
+            vals, trend="add", seasonal="add", seasonal_periods=seasonal_periods
+        ).fit(optimized=True)
+        preds = np.maximum(model.forecast(periods), 0)
+    except Exception:
+        window = min(seasonal_periods, len(vals))
+        preds = np.full(periods, max(0.0, float(np.mean(vals[-window:]))))
+
+    last_date = df[date_col].iloc[-1]
+    future_dates = pd.date_range(start=last_date, periods=periods + 1, freq=freq)[1:]
+
+    return pd.DataFrame({"date": future_dates, "forecast": preds})

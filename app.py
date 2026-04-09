@@ -9,7 +9,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(__file__))
 from src.data_loader import load_all_data, get_family_sales, get_abc_classification, get_aggregated_sales
-from src.forecasting import train_test_split_ts, run_all_forecasts, forecast_moving_average, forecast_exp_smoothing, forecast_arima, forecast_prophet, forecast_xgboost, evaluate_model
+from src.forecasting import train_test_split_ts, run_all_forecasts, forecast_moving_average, forecast_exp_smoothing, forecast_arima, forecast_prophet, forecast_xgboost, evaluate_model, forecast_future
 from src.inventory import full_inventory_analysis, what_if_analysis, cost_curve_data
 
 # ─── Page Config ───
@@ -61,7 +61,11 @@ def main():
         col2.metric("Stores", df["store_nbr"].nunique())
         col3.metric("Product Families", df["family"].nunique())
         col4.metric("Date Range", f"{(df['date'].max() - df['date'].min()).days:,} days")
-        col5.metric("Total Sales", f"${df['sales'].sum():,.0f}")
+        _cur_yr = df["year"].max()
+        _sales_cur = df[df["year"] == _cur_yr]["sales"].sum()
+        _sales_prev = df[df["year"] == _cur_yr - 1]["sales"].sum()
+        _yoy = ((_sales_cur - _sales_prev) / _sales_prev * 100) if _sales_prev > 0 else 0
+        col5.metric("Total Sales", f"${df['sales'].sum():,.0f}", delta=f"{_yoy:+.1f}% YoY")
 
         st.markdown("---")
 
@@ -77,8 +81,9 @@ def main():
         with c2:
             st.subheader("Top 10 Product Families")
             top_fam = df.groupby("family")["sales"].sum().sort_values(ascending=True).tail(10).reset_index()
-            fig = px.bar(top_fam, x="sales", y="family", orientation="h", labels={"sales": "Total Sales", "family": "Product Family"})
-            fig.update_layout(height=350, margin=dict(t=10, b=10))
+            fig = px.bar(top_fam, x="sales", y="family", orientation="h", labels={"sales": "Total Sales", "family": "Product Family"},
+                         color="sales", color_continuous_scale="Blues")
+            fig.update_layout(height=350, margin=dict(t=10, b=10), coloraxis_showscale=False)
             st.plotly_chart(fig, use_container_width=True)
 
         c3, c4 = st.columns(2)
@@ -92,7 +97,6 @@ def main():
 
         with c4:
             st.subheader("Oil Price vs Sales (Monthly)")
-            monthly = get_aggregated_sales(df, "ME")
             fig = make_subplots(specs=[[{"secondary_y": True}]])
             fig.add_trace(go.Scatter(x=monthly["date"], y=monthly["total_sales"], name="Sales", line=dict(color="#6366f1")), secondary_y=False)
             fig.add_trace(go.Scatter(x=monthly["date"], y=monthly["avg_oil_price"], name="Oil Price", line=dict(color="#f59e0b", dash="dash")), secondary_y=True)
@@ -100,6 +104,16 @@ def main():
             fig.update_yaxes(title_text="Sales", secondary_y=False)
             fig.update_yaxes(title_text="Oil Price ($)", secondary_y=True)
             st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("Year-over-Year Sales Comparison")
+        yoy_df = df.groupby(["year", "month"])["sales"].sum().reset_index()
+        yoy_df["month_label"] = pd.to_datetime(yoy_df["month"], format="%m").dt.strftime("%b")
+        fig = px.line(yoy_df, x="month_label", y="sales", color="year",
+                      labels={"sales": "Total Sales", "month_label": "Month", "year": "Year"},
+                      color_discrete_sequence=px.colors.sequential.Blues[2:])
+        fig.update_layout(height=350, margin=dict(t=10), legend=dict(orientation="h", y=1.1))
+        st.plotly_chart(fig, use_container_width=True)
 
     # ═══════════════════════════════════════════
     # EXPLORATORY ANALYSIS
@@ -140,13 +154,29 @@ def main():
             fig.update_layout(height=300, margin=dict(t=10))
             st.plotly_chart(fig, use_container_width=True)
 
+        st.subheader("Sales Heatmap (Day of Week × Month)")
+        day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        pivot = fam_daily.groupby(["day_name", "month"])["sales"].mean().unstack(fill_value=0)
+        pivot = pivot.reindex([d for d in day_order if d in pivot.index])
+        fig = px.imshow(pivot, labels=dict(x="Month", y="Day of Week", color="Avg Sales"),
+                        color_continuous_scale="Blues", aspect="auto",
+                        x=[str(m) for m in pivot.columns])
+        fig.update_layout(height=280, margin=dict(t=10))
+        st.plotly_chart(fig, use_container_width=True)
+
         st.subheader("Promotion Impact")
         promo = fam_daily.groupby("onpromotion")["sales"].mean()
         if len(promo) >= 2:
             base = promo.get(0, 0)
             if base > 0:
                 promo_lift = ((promo.get(1, 0) - base) / base) * 100
-                st.metric("Promo Sales Lift", f"{promo_lift:.1f}%", delta=f"{'↑' if promo_lift > 0 else '↓'}")
+                pc1, pc2 = st.columns(2)
+                pc1.metric("Promo Sales Lift", f"{promo_lift:.1f}%", delta=f"{'↑' if promo_lift > 0 else '↓'}")
+                promo_df = pd.DataFrame({"Status": ["No Promo", "On Promo"], "Avg Sales": [base, promo.get(1, 0)]})
+                fig = px.bar(promo_df, x="Status", y="Avg Sales", color="Status",
+                             color_discrete_map={"No Promo": "#94a3b8", "On Promo": "#6366f1"})
+                fig.update_layout(height=250, margin=dict(t=10), showlegend=False)
+                pc2.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Base (no-promo) sales are 0, cannot calculate promo lift.")
         else:
@@ -201,6 +231,40 @@ def main():
 
             fig.update_layout(height=500, margin=dict(t=10), legend=dict(orientation="h", yanchor="bottom", y=-0.3))
             st.plotly_chart(fig, use_container_width=True)
+
+            # Download backtest results
+            csv_results = results[["model", "MAE", "RMSE", "MAPE"]].to_csv(index=False)
+            st.download_button("Download Model Comparison CSV", csv_results,
+                               f"{sel_family}_model_comparison.csv", "text/csv")
+
+            # ── Future Forecast ──────────────────────────────────────
+            st.markdown("---")
+            st.subheader("Future Forecast")
+            horizon = st.slider("Forecast Horizon (periods)", min_value=4, max_value=52, value=12,
+                                help=f"Number of {freq.lower()} periods to project ahead")
+
+            with st.spinner("Generating future forecast..."):
+                future_df = forecast_future(fam_data, horizon, "sales", "date", freq_map[freq])
+
+            fig2 = go.Figure()
+            fig2.add_trace(go.Scatter(
+                x=fam_data["date"], y=fam_data["sales"],
+                name="Historical", line=dict(color="#94a3b8"),
+            ))
+            fig2.add_trace(go.Scatter(
+                x=future_df["date"], y=future_df["forecast"],
+                name="Forecast", line=dict(color="#6366f1", width=2.5, dash="dash"),
+                fill="tozeroy", fillcolor="rgba(99,102,241,0.08)",
+            ))
+            fig2.add_vline(x=str(fam_data["date"].iloc[-1]), line_dash="dot",
+                           line_color="#e11d48", annotation_text="Forecast start")
+            fig2.update_layout(height=420, margin=dict(t=10),
+                               legend=dict(orientation="h", y=1.05))
+            st.plotly_chart(fig2, use_container_width=True)
+
+            csv_future = future_df.to_csv(index=False)
+            st.download_button("Download Future Forecast CSV", csv_future,
+                               f"{sel_family}_future_forecast.csv", "text/csv")
 
     # ═══════════════════════════════════════════
     # INVENTORY OPTIMIZATION
